@@ -12,7 +12,7 @@ Program pendukung untuk aplikasi Profiling BPS NTT. Menggunakan hasil eksport Pr
 
 3. Rename file .env.example menjadi .env dan isikan username dan password anda di file .env tersebut
 
-4. Siapkan file excel hasil ekspor dari aplikasi profiling. Pastikan field Idsbr, Keberadaan usaha, Catatan, Sumber Profiling sudah terisi. Note : Perhatikan kolom Idsbr duplikat jika Keberadaan usaha berkode 9, Jika tidak terisi maka bisa isi manual di file excel atau row tersebut dihapus dan entry secara manual di Matchapro. Sementara script ini belum mengakomodasi untuk direktori yang berkode Aktif Pindah (kode 7) atau Salah Kode Wilayah (kode 11)
+4. Siapkan file excel hasil ekspor dari aplikasi profiling. Pastikan field Idsbr, Keberadaan usaha, Catatan, Sumber Profiling sudah terisi. Note : Perhatikan kolom Idsbr duplikat jika Keberadaan usaha berkode 9, Jika tidak terisi maka bisa isi manual di file excel atau row tersebut dihapus dan entry secara manual di Matchapro. Sementara aplikasi ini belum mengakomodasi untuk direktori yang berkode Aktif Pindah (kode 7) atau Salah Kode Wilayah (kode 11). Harap dicek file excel kolom  Is new dan pastikan berkode 0.
 
 5. Pastikan PC sudah terkoneksi VPN
 

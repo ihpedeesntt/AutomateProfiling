@@ -37,6 +37,7 @@ def login(page,context,username,password):
         page.click("#kc-login")
         context.storage_state(path="state.json")
         print("Login Successful")
+        time.sleep(30)
     except Exception as e:
         print("already logged in")
         print(e)
@@ -301,6 +302,7 @@ class Worker(QThread):
                         status = page.locator(
                             "#table-history-profiling span.badge.rounded-pill"
                         ).first
+                        profiler = page.locator("#table-history-profiling tbody tr td").first.inner_text()
                         status_text = status.inner_text().lower()
                         self._emit(f"Status: {status_text}\n")
 
@@ -310,6 +312,13 @@ class Worker(QThread):
                             page.locator(
                                 "#modal-view-history-profiling button", has_text="Close"
                             ).click(force=True)
+                        elif status_text == "open" and profiler.strip().lower() != username.strip().lower():
+                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah diinput oleh {profiler}, bukan oleh {username}\n")
+                            page.wait_for_timeout(1000)
+                            page.locator(
+                                "#modal-view-history-profiling button", has_text="Close"
+                            ).click(force=True)
+                            
                         else:
                             self._emit(f"{idsbr} - {row['Nama usaha']} belum submit\n")
                             page.wait_for_timeout(1000)
@@ -337,57 +346,6 @@ class Worker(QThread):
 
         except Exception as e:
             self.finished_err.emit(str(e))
-
-
-def main():
-    print("Hello from matchapro!")
-    
-    p =  sync_playwright().start()
-    browser = p.chromium.launch(headless=False)
-    context = browser.new_context(storage_state="state.json" if os.path.exists("state.json") else None)
-    page = context.new_page()
-
-    username,password = load_sso()
-    login(page,context,username,password)
-
-    page.goto("https://matchapro.web.bps.go.id/direktori-usaha")
-    page.click("text=Skip")
-
-    page.locator("#select2-f_provinsi-container").click()
-    page.locator(".select2-results__option", has_text="[53] NUSA TENGGARA TIMUR").click()
-    page.locator("#select2-f_kabupaten-container").click()
-    page.locator(".select2-results__option", has_text="[71] KUPANG").click()
-
-    df = read_profiling_excel("Direktori\\export-550-directories.xlsx")
-    for idsbr, row in df.iterrows():
-        page.locator('[name="idsbr"]').fill(str(idsbr))
-        print("Mengisi", idsbr, "-", row["Nama usaha"])
-        time.sleep(5)
-        if page.get_by_label("Lihat History Profiling").count() == 1:
-            history_profiling = page.get_by_label("Lihat History Profiling").first
-            history_profiling.click()
-            page.locator(".modal-body > .blockUI.blockMsg.blockElement").wait_for(
-                state="detached", 
-            )
-            status = page.locator("#table-history-profiling span.badge.rounded-pill").first
-            status_text = status.inner_text().lower()
-            print(status_text)
-            if status_text == "submitted" or status_text == "approved":
-                print(idsbr, "-", row["Nama usaha"], " sudah submit")
-                page.wait_for_timeout(1000)
-                page.locator('#modal-view-history-profiling button', has_text="Close").click(force=True)
-            else:
-                print(idsbr, "-", row["Nama usaha"], " belum submit")
-                page.wait_for_timeout(1000)
-                page.locator('#modal-view-history-profiling button', has_text="Close").click(force=True)
-                page.wait_for_timeout(1000)
-                update_profiling(page,idsbr,row)
-        else:
-            print("Open")
-            page.wait_for_timeout(1000)
-            update_profiling(page,idsbr,row)
-    input("Browser is open. Press Enter to exit...")
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
