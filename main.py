@@ -51,36 +51,54 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             page.get_by_text("Ya, edit!").click()
         new_page = popup_info.value
         time.sleep(5)
-        new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
-        new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
-        value = str(row["Keberadaan usaha"]).strip().lower()
-        locator = f'input[name="kondisi_usaha"][value="{value}"]'
-        new_page.locator(locator).check()
-        if value == "9":
-            new_page.get_by_placeholder("IDSBR Master").fill(
-                str(row["Idsbr duplikat"])
+        if new_page.get_by_label("Sumber Profiling").count() == 0:
+            log(f"Id SBR {idsbr} not authorized by profiler, skipping...")
+            new_page.close()
+            return
+        else:
+            new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
+            new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
+            value = str(row["Keberadaan usaha"]).strip().lower()
+            locator = f'input[name="kondisi_usaha"][value="{value}"]'
+            new_page.locator(locator).check()
+            if value == "9":
+                new_page.get_by_placeholder("IDSBR Master").fill(
+                    str(row["Idsbr duplikat"])
+                )
+                log(f"Filling IDSBR Master with {str(row['Idsbr duplikat'])} for {idsbr}")
+                new_page.wait_for_timeout(1000)
+                new_page.locator(".btn.btn-outline-primary", has_text="Check").wait_for(state="visible")
+                new_page.locator(".btn.btn-outline-primary", has_text="Check").click()
+                log("Clicked button to fetch data from IDSBR Master")
+                try:
+                    new_page.wait_for_timeout(1000) 
+                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").wait_for(state="visible")
+                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").click()
+                    log("Confirmed to proceed with IDSBR Master data")
+                except Exception as e:
+                    raise ValueError(f"Erorr time for waiting : {e}")
+
+            email_field = new_page.get_by_placeholder("Email")
+            checkbox = new_page.locator("#check-email")
+            email_value = email_field.input_value().strip()
+
+            if not email_value :
+                if checkbox.is_checked():
+                    checkbox.uncheck()
+                    print(f"unchecked email checkbox for {idsbr}")
+
+            log(
+                f"{idsbr} {str(row['Nama usaha'])} Sumber Profiling : {str(row['Sumber profiling'])}, Catatan : {str(row['Catatan'])},  status perusahaan {value}"
             )
-        email_field = new_page.get_by_placeholder("Email")
-        checkbox = new_page.locator("#check-email")
-        email_value = email_field.input_value().strip()
-
-        if not email_value :
-            if checkbox.is_checked():
-                checkbox.uncheck()
-                print(f"unchecked email checkbox for {idsbr}")
-
-        log(
-            f"{idsbr} {str(row['Nama usaha'])} Sumber Profiling : {str(row['Sumber profiling'])}, Catatan : {str(row['Catatan'])},  status perusahaan {value}"
-        )
-        new_page.wait_for_timeout(1000)
-        new_page.get_by_text("Submit Final").click(force=True)
-        konsistensi = new_page.locator("#confirm-consistency")
-        if konsistensi.count() == 1:
-            konsistensi.click()    
-        new_page.locator("button.swal2-confirm", has_text="Ya, Submit!").click()               
-        new_page.wait_for_timeout(1000)
-        new_page.close()
-        time.sleep(5)
+            new_page.wait_for_timeout(1000)
+            new_page.get_by_text("Submit Final").click(force=True)
+            konsistensi = new_page.locator("#confirm-consistency")
+            if konsistensi.count() == 1:
+                konsistensi.click()    
+            new_page.locator("button.swal2-confirm", has_text="Ya, Submit!").click()               
+            new_page.wait_for_timeout(1000)
+            new_page.close()
+            time.sleep(5)
 
 def load_sso():
     load_dotenv()
