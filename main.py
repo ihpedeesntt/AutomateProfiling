@@ -62,8 +62,10 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             locator = f'input[name="kondisi_usaha"][value="{value}"]'
             new_page.locator(locator).check()
             if value == "9":
+                dupe = row["Idsbr duplikat"]
+                dupe_str = str(int(dupe))
                 new_page.get_by_placeholder("IDSBR Master").fill(
-                    str(row["Idsbr duplikat"])
+                    dupe_str
                 )
                 log(f"Filling IDSBR Master with {str(row['Idsbr duplikat'])} for {idsbr}")
                 new_page.wait_for_timeout(1000)
