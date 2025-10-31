@@ -24,7 +24,7 @@ from typing import Callable, Optional
 
 
 def read_profiling_excel(filepath):
-    df = pd.read_excel(filepath, index_col=0)
+    df = pd.read_excel(filepath, index_col=0, dtype={'Idsbr duplikat': str})
     return df
 
 def login(page,context,username,password):
