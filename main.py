@@ -43,8 +43,13 @@ def login(page,context,username,password):
         print(e)
 
 def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = None):
-    log = emit or print
+    def log(msg:str):
+        print(msg)
+        if emit:
+            emit(msg)
+            
     edit_button = page.locator(".btn-edit-perusahaan").first
+    edit_button.wait_for(state="visible", timeout=30000)
     if edit_button.count() == 1:
         page.locator(".btn-edit-perusahaan").first.click()
         with page.expect_popup() as popup_info:
@@ -56,6 +61,8 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             new_page.close()
             return
         else:
+            sumber_profiling_field = new_page.get_by_label("Sumber Profiling")
+            sumber_profiling_field.wait_for(state="visible", timeout=30000)
             new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
             new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
             value = str(row["Keberadaan usaha"]).strip().lower()
@@ -73,8 +80,7 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
                 new_page.locator(".btn.btn-outline-primary", has_text="Check").click()
                 log("Clicked button to fetch data from IDSBR Master")
                 try:
-                    new_page.wait_for_timeout(1000) 
-                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").wait_for(state="visible")
+                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").wait_for(state="visible", timeout=30000)
                     new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").click()
                     log("Confirmed to proceed with IDSBR Master data")
                 except Exception as e:
@@ -296,13 +302,12 @@ class Worker(QThread):
                 ).click()
                 page.locator("#select2-f_kabupaten-container").click()
                 page.locator(".select2-results__option", has_text=f"{self.kabupaten_text}").click()
-
                 # tail_df = df.tail(50)
                 for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
                     if self._stop_requested:
                         self._emit("Stop. Exiting loop...\n")
                         break
-
+                    
                     page.locator('[name="idsbr"]').fill(str(idsbr))
                     self._emit(f"Mengisi {idsbr} - {row['Nama usaha']}\n")
                     time.sleep(5)
@@ -327,7 +332,7 @@ class Worker(QThread):
                         self._emit(f"Status: {status_text}\n")
 
                         if status_text == "submitted" or status_text == "approved":
-                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah submit\n")
+                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah submit atau approved\n")
                             page.wait_for_timeout(1000)
                             page.locator(
                                 "#modal-view-history-profiling button", has_text="Close"
@@ -347,10 +352,12 @@ class Worker(QThread):
                             ).click(force=True)
                             page.wait_for_timeout(1000)
                             update_profiling(page, idsbr, row, emit=self._emit)
+                    elif page.locator('span.badge.bg-light-primary', has_text="PROFILING").count() > 0:
+                        self._emit("Locked\n")
                     else:
                         self._emit("Open\n")
                         page.wait_for_timeout(1000)
-                        update_profiling(page, idsbr, row)
+                        update_profiling(page, idsbr, row, emit=self._emit)
 
                     # update progress
                     self.progress.emit(int(idx / total * 100))
