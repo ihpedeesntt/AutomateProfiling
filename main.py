@@ -24,7 +24,7 @@ from typing import Callable, Optional
 
 
 def read_profiling_excel(filepath):
-    df = pd.read_excel(filepath, index_col=0)
+    df = pd.read_excel(filepath, index_col=0, dtype={'Idsbr duplikat': str})
     return df
 
 def login(page,context,username,password):
@@ -43,44 +43,70 @@ def login(page,context,username,password):
         print(e)
 
 def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = None):
-    log = emit or print
+    def log(msg:str):
+        print(msg)
+        if emit:
+            emit(msg)
+            
     edit_button = page.locator(".btn-edit-perusahaan").first
+    edit_button.wait_for(state="visible", timeout=30000)
     if edit_button.count() == 1:
         page.locator(".btn-edit-perusahaan").first.click()
         with page.expect_popup() as popup_info:
             page.get_by_text("Ya, edit!").click()
         new_page = popup_info.value
         time.sleep(5)
-        new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
-        new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
-        value = str(row["Keberadaan usaha"]).strip().lower()
-        locator = f'input[name="kondisi_usaha"][value="{value}"]'
-        new_page.locator(locator).check()
-        if value == "9":
-            new_page.get_by_placeholder("IDSBR Master").fill(
-                str(row["Idsbr duplikat"])
+        if new_page.get_by_label("Sumber Profiling").count() == 0:
+            log(f"Id SBR {idsbr} not authorized by profiler, skipping...")
+            new_page.close()
+            return
+        else:
+            sumber_profiling_field = new_page.get_by_label("Sumber Profiling")
+            sumber_profiling_field.wait_for(state="visible", timeout=30000)
+            new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
+            new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
+            value = str(row["Keberadaan usaha"]).strip().lower()
+            locator = f'input[name="kondisi_usaha"][value="{value}"]'
+            new_page.locator(locator).check()
+            if value == "9":
+                dupe = row["Idsbr duplikat"]
+                dupe_str = str(int(dupe))
+                new_page.get_by_placeholder("IDSBR Master").fill(
+                    dupe_str
+                )
+                log(f"Filling IDSBR Master with {str(row['Idsbr duplikat'])} for {idsbr}")
+                new_page.wait_for_timeout(1000)
+                new_page.locator(".btn.btn-outline-primary", has_text="Check").wait_for(state="visible")
+                new_page.locator(".btn.btn-outline-primary", has_text="Check").click()
+                log("Clicked button to fetch data from IDSBR Master")
+                try:
+                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").wait_for(state="visible", timeout=30000)
+                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").click()
+                    log("Confirmed to proceed with IDSBR Master data")
+                except Exception as e:
+                    raise ValueError(f"Erorr time for waiting : {e}")
+
+            email_field = new_page.get_by_placeholder("Email")
+            checkbox = new_page.locator("#check-email")
+            email_value = email_field.input_value().strip()
+
+            if not email_value :
+                if checkbox.is_checked():
+                    checkbox.uncheck()
+                    print(f"unchecked email checkbox for {idsbr}")
+
+            log(
+                f"{idsbr} {str(row['Nama usaha'])} Sumber Profiling : {str(row['Sumber profiling'])}, Catatan : {str(row['Catatan'])},  status perusahaan {value}"
             )
-        email_field = new_page.get_by_placeholder("Email")
-        checkbox = new_page.locator("#check-email")
-        email_value = email_field.input_value().strip()
-
-        if not email_value :
-            if checkbox.is_checked():
-                checkbox.uncheck()
-                print(f"unchecked email checkbox for {idsbr}")
-
-        log(
-            f"{idsbr} {str(row['Nama usaha'])} Sumber Profiling : {str(row['Sumber profiling'])}, Catatan : {str(row['Catatan'])},  status perusahaan {value}"
-        )
-        new_page.wait_for_timeout(1000)
-        new_page.get_by_text("Submit Final").click(force=True)
-        konsistensi = new_page.locator("#confirm-consistency")
-        if konsistensi.count() == 1:
-            konsistensi.click()    
-        new_page.locator("button.swal2-confirm", has_text="Ya, Submit!").click()               
-        new_page.wait_for_timeout(1000)
-        new_page.close()
-        time.sleep(5)
+            new_page.wait_for_timeout(1000)
+            new_page.get_by_text("Submit Final").click(force=True)
+            konsistensi = new_page.locator("#confirm-consistency")
+            if konsistensi.count() == 1:
+                konsistensi.click()    
+            new_page.locator("button.swal2-confirm", has_text="Ya, Submit!").click()               
+            new_page.wait_for_timeout(1000)
+            new_page.close()
+            time.sleep(5)
 
 def load_sso():
     load_dotenv()
@@ -276,13 +302,12 @@ class Worker(QThread):
                 ).click()
                 page.locator("#select2-f_kabupaten-container").click()
                 page.locator(".select2-results__option", has_text=f"{self.kabupaten_text}").click()
-
                 # tail_df = df.tail(50)
                 for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
                     if self._stop_requested:
                         self._emit("Stop. Exiting loop...\n")
                         break
-
+                    
                     page.locator('[name="idsbr"]').fill(str(idsbr))
                     self._emit(f"Mengisi {idsbr} - {row['Nama usaha']}\n")
                     time.sleep(5)
@@ -307,7 +332,7 @@ class Worker(QThread):
                         self._emit(f"Status: {status_text}\n")
 
                         if status_text == "submitted" or status_text == "approved":
-                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah submit\n")
+                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah submit atau approved\n")
                             page.wait_for_timeout(1000)
                             page.locator(
                                 "#modal-view-history-profiling button", has_text="Close"
@@ -327,10 +352,12 @@ class Worker(QThread):
                             ).click(force=True)
                             page.wait_for_timeout(1000)
                             update_profiling(page, idsbr, row, emit=self._emit)
+                    elif page.locator('span.badge.bg-light-primary', has_text="PROFILING").count() > 0:
+                        self._emit("Locked\n")
                     else:
                         self._emit("Open\n")
                         page.wait_for_timeout(1000)
-                        update_profiling(page, idsbr, row)
+                        update_profiling(page, idsbr, row, emit=self._emit)
 
                     # update progress
                     self.progress.emit(int(idx / total * 100))
