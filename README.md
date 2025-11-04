@@ -4,7 +4,7 @@ Program pendukung untuk aplikasi Profiling BPS NTT. Menggunakan hasil eksport Pr
 ## Instalasi
 1. Salin repositori menggunakan git clone:
 
-```git clone git@github.com:ihpedeesntt/AutomateProfiling.git ```
+```https://github.com/ihpedeesntt/AutomateProfiling.git ```
 
 2. Pastikan di PC lokal sudah terinstall uv. Tata cara instalasi UV dapat diakses di tautan berikut:
 

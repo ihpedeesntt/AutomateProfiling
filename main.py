@@ -65,7 +65,7 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             sumber_profiling_field.wait_for(state="visible", timeout=30000)
             new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
             new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
-            value = str(row["Keberadaan usaha"]).strip().lower()
+            value = str(int(row["Keberadaan usaha"])).strip().lower()
             locator = f'input[name="kondisi_usaha"][value="{value}"]'
             new_page.locator(locator).check()
             if value == "9":
@@ -93,7 +93,7 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             if not email_value :
                 if checkbox.is_checked():
                     checkbox.uncheck()
-                    print(f"unchecked email checkbox for {idsbr}")
+                    log(f"unchecked email checkbox for {idsbr}")
 
             log(
                 f"{idsbr} {str(row['Nama usaha'])} Sumber Profiling : {str(row['Sumber profiling'])}, Catatan : {str(row['Catatan'])},  status perusahaan {value}"
