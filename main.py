@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 import pandas as pd
 import time
 from pathlib import Path
@@ -55,6 +56,22 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
         with page.expect_popup() as popup_info:
             page.get_by_text("Ya, edit!").click()
         new_page = popup_info.value
+        loading_spinner = new_page.locator(
+            "div.blockUI.blockMsg.blockPage", has_text="Loading data"
+        ).first
+        try:
+            print("Loading...")
+            loading_spinner.wait_for(state="visible", timeout=10_000)
+        except PlaywrightTimeoutError:
+            pass
+
+        try:
+            loading_spinner.wait_for(state="hidden", timeout=30_000)
+        except PlaywrightTimeoutError:
+            print("Continue")
+
+        new_page.get_by_label("Sumber Profiling").fill(...)
+
         time.sleep(5)
         if new_page.get_by_label("Sumber Profiling").count() == 0:
             log(f"Id SBR {idsbr} not authorized by profiler, skipping...")
@@ -107,6 +124,26 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             new_page.wait_for_timeout(1000)
             new_page.close()
             time.sleep(5)
+
+def wait_for_search_spinner(
+    page, emit=None, appear_timeout=10_000, disappear_timeout=30_000
+):
+    spinner = page.locator("div.blockUI.blockMsg.blockElement").first
+
+    try:
+        # wait until it appears (if it doesn’t, no problem)
+        spinner.wait_for(state="visible", timeout=appear_timeout)
+        print("Loading...")
+    except PlaywrightTimeoutError:
+        print("Finished...\n")
+        return
+
+    try:
+        spinner.wait_for(state="hidden", timeout=disappear_timeout)
+        print("Loading...\n")
+    except PlaywrightTimeoutError:
+        print("Continue\n")
+
 
 def load_sso():
     load_dotenv()
@@ -289,6 +326,8 @@ class Worker(QThread):
                 context = browser.new_context(
                     storage_state="state.json" if os.path.exists("state.json") else None
                 )
+                context.set_default_timeout(60_000)             
+                context.set_default_navigation_timeout(90_000)
                 page = context.new_page()
 
                 self._emit("Login...\n")
@@ -310,7 +349,7 @@ class Worker(QThread):
                     
                     page.locator('[name="idsbr"]').fill(str(idsbr))
                     self._emit(f"Mengisi {idsbr} - {row['Nama usaha']}\n")
-                    time.sleep(5)
+                    wait_for_search_spinner(page, emit=self._emit)
 
                     if page.get_by_label("Lihat History Profiling").count() == 1:
                         history_profiling = page.get_by_label(
