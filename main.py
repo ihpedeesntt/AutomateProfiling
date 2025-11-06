@@ -43,6 +43,33 @@ def login(page,context,username,password):
         print("already logged in")
         print(e)
 
+def informasi_usaha(new_page, row, emit: Optional[Callable[[str], None]] = None):
+    jenis_kepemilikan_usaha = str(int(row["Jenis kepemilikan usaha"]))
+    bentuk_badan_hukum = str(int(row["Bentuk badan hukum"]))
+    tahun_berdiri = str(int(row["Tahun berdiri"]))
+    jaringan_usaha = str(int(row["Jaringan usaha"]))
+    sektor_institusi = str(int(row["Sektor institusi"]))
+    if jenis_kepemilikan_usaha :
+        new_page.locator("#select2-jenis_kepemilikan_usaha-container").click()
+        new_page.locator(".select2-results__option", has_text=jenis_kepemilikan_usaha).click()
+
+    if bentuk_badan_hukum:
+        new_page.locator("#select2-badan_usaha-container").click()
+        new_page.locator(".select2-results__option", has_text=bentuk_badan_hukum).click()
+
+    if tahun_berdiri:
+        new_page.get_by_label("Tahun Berdiri").fill(tahun_berdiri)
+    
+    if jaringan_usaha:
+        jaringan_usaha_locator = f'input[name="jaringan_usaha"][value="{jaringan_usaha}"]'
+        new_page.locator(jaringan_usaha_locator).check()
+
+    if sektor_institusi:
+        new_page.locator("#select2-sektor_institusi_usaha-container").click()
+        new_page.locator(".select2-results__option", has_text=sektor_institusi).click()
+
+
+
 def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = None):
     def log(msg:str):
         print(msg)
@@ -100,6 +127,8 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
                     log("Confirmed to proceed with IDSBR Master data")
                 except Exception as e:
                     raise ValueError(f"Erorr time for waiting : {e}")
+                
+            informasi_usaha(new_page, row, emit)
 
             email_field = new_page.get_by_placeholder("Email")
             checkbox = new_page.locator("#check-email")
@@ -113,6 +142,7 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             log(
                 f"{idsbr} {str(row['Nama usaha'])} Sumber Profiling : {str(row['Sumber profiling'])}, Catatan : {str(row['Catatan'])},  status perusahaan {value}"
             )
+            input()
             new_page.wait_for_timeout(1000)
             new_page.get_by_text("Submit Final").click(force=True)
             konsistensi = new_page.locator("#confirm-consistency")
