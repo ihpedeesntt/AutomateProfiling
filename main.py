@@ -52,6 +52,31 @@ def informasi_usaha(new_page, row):
             return str(int(float(value)))
         except (ValueError, TypeError):
             return None
+        
+    SEKTOR_INSTITUSI = {
+        "1": "S11 - Korporasi Finansial",
+        "2": "S12 - Korporasi Non Finansial",
+        "3": "S13 -  Pemerintahan Umum",
+        "4": "S14 - Rumah Tangga",
+        "5": "S15 - LNPRT",
+        "6": "S20 - Luar Negeri",
+    }
+
+    BENTUK_BADAN_HUKUM = {
+        "1" : '1. Perseroan (PT/NV, PT Persero, PT Tbk, PT Persero Tbk, Perseroan Daerah, Perseroan Perseorangan)',
+        "2" : '2. Yayasan' ,
+        "3" : '3. Koperasi',
+        "4" : '4. Dana Pensiun',
+        "5" : '5. Perum/Perumda',
+        "6" : '6. BUM Desa',
+        "7" : '7. Persekutuan Komanditer (CV)',
+        "8" : '8. Persekutuan Firma',
+        "9" : '9. Persekutuan Perdata',
+        "10": '10. Kantor Perwakilan Luar Negeri',
+        "11": '11. Badan Usaha Luar Negeri',
+        "12": '12. Usaha orang perseorangan',
+        "13": '13. Lainnya'
+    }
 
     jenis_kepemilikan_usaha = safe_str_int(row.get("Jenis kepemilikan usaha"))
     bentuk_badan_hukum = safe_str_int(row.get("Bentuk badan hukum"))
@@ -84,11 +109,12 @@ def informasi_usaha(new_page, row):
             print(f"Error selecting Jenis Kepemilikan Usaha option '{jenis_kepemilikan_usaha}']: {e}")
 
     if bentuk_badan_hukum:
+        label = BENTUK_BADAN_HUKUM.get(bentuk_badan_hukum, bentuk_badan_hukum)
         safe_click("#select2-badan_usaha-container", "Bentuk Badan Hukum")
         try:
-            new_page.locator(".select2-results__option", has_text=re.compile(bentuk_badan_hukum, re.I)).click()
+            new_page.locator(".select2-results__option", has_text=label).click()
         except Exception as e:
-            print(f"Error selecting Bentuk Badan Hukum option '{bentuk_badan_hukum}']: {e}")
+            print(f"Error selecting Bentuk Badan Hukum option '{label}']: {e}")
 
     if tahun_berdiri:
         safe_fill("Tahun Berdiri", tahun_berdiri)
@@ -101,11 +127,12 @@ def informasi_usaha(new_page, row):
             print(f"[Error checking jaringan_usaha '{jaringan_usaha}']: {e}")
 
     if sektor_institusi:
+        label = SEKTOR_INSTITUSI.get(sektor_institusi, sektor_institusi)
         safe_click("#select2-sektor_institusi_usaha-container", "Sektor Institusi")
         try:
-            new_page.locator(".select2-results__option", has_text=re.compile(sektor_institusi, re.I)).click()
+            new_page.locator(".select2-results__option", has_text=label).click()
         except Exception as e:
-            print(f"[Error selecting Sektor Institusi option '{sektor_institusi}']: {e}")
+            print(f"[Error selecting Sektor Institusi option '{label}']: {e}")
 
     return
 
