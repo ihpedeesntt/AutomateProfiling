@@ -160,10 +160,13 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
         except PlaywrightTimeoutError:
             pass
 
-        try:
-            loading_spinner.wait_for(state="hidden", timeout=30_000)
-        except PlaywrightTimeoutError:
-            print("Continue")
+        while True:
+            try:
+                loading_spinner.wait_for(state="detached", timeout=10000)
+                break 
+            except PlaywrightTimeoutError:
+                log("Still loading data...")
+                pass 
 
         time.sleep(5)
         if new_page.get_by_label("Sumber Profiling").count() == 0:
@@ -172,7 +175,7 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             return
         else:
             sumber_profiling_field = new_page.get_by_label("Sumber Profiling")
-            sumber_profiling_field.wait_for(state="visible", timeout=30000)
+            sumber_profiling_field.wait_for(state="visible", timeout=120_000)
             new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
             new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
             value = str(int(row["Keberadaan usaha"])).strip().lower()
