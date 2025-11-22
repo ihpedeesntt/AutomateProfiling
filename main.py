@@ -22,6 +22,7 @@ import pandas as pd
 import time
 from pathlib import Path
 from typing import Callable, Optional
+import re   
 
 
 def read_profiling_excel(filepath):
@@ -42,6 +43,100 @@ def login(page,context,username,password):
     except Exception as e:
         print("already logged in")
         print(e)
+
+def informasi_usaha(new_page, row):
+    def safe_str_int(value):
+        if pd.isna(value) or str(value).strip() == "":
+            return None
+        try:
+            return str(int(float(value)))
+        except (ValueError, TypeError):
+            return None
+        
+    SEKTOR_INSTITUSI = {
+        "1": "S11 - Korporasi Finansial",
+        "2": "S12 - Korporasi Non Finansial",
+        "3": "S13 -  Pemerintahan Umum",
+        "4": "S14 - Rumah Tangga",
+        "5": "S15 - LNPRT",
+        "6": "S20 - Luar Negeri",
+    }
+
+    BENTUK_BADAN_HUKUM = {
+        "1" : '1. Perseroan (PT/NV, PT Persero, PT Tbk, PT Persero Tbk, Perseroan Daerah, Perseroan Perseorangan)',
+        "2" : '2. Yayasan' ,
+        "3" : '3. Koperasi',
+        "4" : '4. Dana Pensiun',
+        "5" : '5. Perum/Perumda',
+        "6" : '6. BUM Desa',
+        "7" : '7. Persekutuan Komanditer (CV)',
+        "8" : '8. Persekutuan Firma',
+        "9" : '9. Persekutuan Perdata',
+        "10": '10. Kantor Perwakilan Luar Negeri',
+        "11": '11. Badan Usaha Luar Negeri',
+        "12": '12. Usaha orang perseorangan',
+        "13": '13. Lainnya'
+    }
+
+    jenis_kepemilikan_usaha = safe_str_int(row.get("Jenis kepemilikan usaha"))
+    bentuk_badan_hukum = safe_str_int(row.get("Bentuk badan hukum"))
+    tahun_berdiri = safe_str_int(row.get("Tahun berdiri"))
+    jaringan_usaha = safe_str_int(row.get("Jaringan usaha"))
+    sektor_institusi = safe_str_int(row.get("Sektor institusi"))
+
+    def safe_click(selector, description=None):
+        try:
+            new_page.locator(selector).wait_for(state="visible", timeout=5000)
+            new_page.locator(selector).click()
+        except PlaywrightTimeoutError:
+            print(f"Element not visible for: {description or selector}")
+        except Exception as e:
+            print(f"clicking {description or selector}]: {e}")
+
+    def safe_fill(label, value):
+        try:
+            new_page.get_by_label(label).fill(value)
+        except PlaywrightTimeoutError:
+            print(f"Input not found: {label}")
+        except Exception as e:
+            print(f"Error filling '{label}']: {e}")
+
+    if jenis_kepemilikan_usaha:
+        safe_click("#select2-jenis_kepemilikan_usaha-container", "Jenis Kepemilikan Usaha")
+        try:
+            new_page.locator(".select2-results__option", has_text=re.compile(jenis_kepemilikan_usaha, re.I)).click()
+        except Exception as e:
+            print(f"Error selecting Jenis Kepemilikan Usaha option '{jenis_kepemilikan_usaha}']: {e}")
+
+    if bentuk_badan_hukum:
+        label = BENTUK_BADAN_HUKUM.get(bentuk_badan_hukum, bentuk_badan_hukum)
+        safe_click("#select2-badan_usaha-container", "Bentuk Badan Hukum")
+        try:
+            new_page.locator(".select2-results__option", has_text=label).click()
+        except Exception as e:
+            print(f"Error selecting Bentuk Badan Hukum option '{label}']: {e}")
+
+    if tahun_berdiri:
+        safe_fill("Tahun Berdiri", tahun_berdiri)
+
+    if jaringan_usaha:
+        jaringan_usaha_locator = f'input[name="jaringan_usaha"][value="{jaringan_usaha}"]'
+        try:
+            new_page.locator(jaringan_usaha_locator).check()
+        except Exception as e:
+            print(f"[Error checking jaringan_usaha '{jaringan_usaha}']: {e}")
+
+    if sektor_institusi:
+        label = SEKTOR_INSTITUSI.get(sektor_institusi, sektor_institusi)
+        safe_click("#select2-sektor_institusi_usaha-container", "Sektor Institusi")
+        try:
+            new_page.locator(".select2-results__option", has_text=label).click()
+        except Exception as e:
+            print(f"[Error selecting Sektor Institusi option '{label}']: {e}")
+
+    return
+
+
 
 def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = None):
     def log(msg:str):
@@ -65,10 +160,13 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
         except PlaywrightTimeoutError:
             pass
 
-        try:
-            loading_spinner.wait_for(state="hidden", timeout=30_000)
-        except PlaywrightTimeoutError:
-            print("Continue")
+        while True:
+            try:
+                loading_spinner.wait_for(state="detached", timeout=10000)
+                break 
+            except PlaywrightTimeoutError:
+                log("Still loading data...")
+                pass 
 
         time.sleep(5)
         if new_page.get_by_label("Sumber Profiling").count() == 0:
@@ -77,7 +175,7 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             return
         else:
             sumber_profiling_field = new_page.get_by_label("Sumber Profiling")
-            sumber_profiling_field.wait_for(state="visible", timeout=30000)
+            sumber_profiling_field.wait_for(state="visible", timeout=120_000)
             new_page.get_by_label("Sumber Profiling").fill(str(row["Sumber profiling"]))
             new_page.get_by_placeholder("Catatan").fill(str(row["Catatan"]))
             value = str(int(row["Keberadaan usaha"])).strip().lower()
@@ -100,6 +198,8 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
                     log("Confirmed to proceed with IDSBR Master data")
                 except Exception as e:
                     raise ValueError(f"Erorr time for waiting : {e}")
+                
+            informasi_usaha(new_page, row)
 
             email_field = new_page.get_by_placeholder("Email")
             checkbox = new_page.locator("#check-email")
