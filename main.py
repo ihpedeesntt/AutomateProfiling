@@ -1,6 +1,7 @@
 import os
 import sys
-from PySide6.QtCore import Qt, QThread, Signal
+import traceback
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
@@ -14,9 +15,10 @@ from PySide6.QtWidgets import (
     QComboBox,
     QTextEdit,
     QProgressBar,
+    QRadioButton,
+    QButtonGroup,
 )
 from PySide6.QtGui import QAction, QIcon
-from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 import pandas as pd
 import time
@@ -262,24 +264,23 @@ def wait_for_search_spinner(
 class PasswordLineEdit(QLineEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
-
         self.setEchoMode(QLineEdit.Password)
+        self.setClearButtonEnabled(True)
 
-        self.iconShow = QIcon("icons/view.png")
-        self.iconHide = QIcon("icons/hide.png")
+        self._icon_show = QIcon("icons/view.png")
+        self._icon_hide = QIcon("icons/hide.png")
+        self._toggle_action = QAction(self._icon_show, "Show password", self)
+        self._toggle_action.setCheckable(True)
+        self._toggle_action.toggled.connect(self.toggle_password_visibility)
+        self.addAction(self._toggle_action, QLineEdit.TrailingPosition)
 
-        self.showPassAction = QAction(self.iconShow, "Show password", self)
-        self.addAction(self.showPassAction, QLineEdit.TrailingPosition)
-        self.showPassAction.setCheckable(True)
-        self.showPassAction.toggled.connect(self.togglePasswordVisibility)
-
-    def togglePasswordVisibility(self, show):
+    def toggle_password_visibility(self, show: bool):
         if show:
             self.setEchoMode(QLineEdit.Normal)
-            self.showPassAction.setIcon(self.iconHide)
+            self._toggle_action.setIcon(self._icon_hide)
         else:
             self.setEchoMode(QLineEdit.Password)
-            self.showPassAction.setIcon(self.iconShow)
+            self._toggle_action.setIcon(self._icon_show)
 
 
 class App(QWidget):
@@ -292,11 +293,8 @@ class App(QWidget):
         self.username_field = QLineEdit(self)
         self.username_field.setPlaceholderText("Username SSO")
         self.username_field.setClearButtonEnabled(True)
-        self.password_field = QLineEdit(self)
+        self.password_field = PasswordLineEdit(self)
         self.password_field.setPlaceholderText("Password SSO")
-        self.password_field.setEchoMode(PasswordLineEdit.Password)
-        self.password_field.setClearButtonEnabled(True)
-        self.password_field.displayText()
 
         self.path_edit = QLineEdit(self)
         self.path_edit.setPlaceholderText("Pilih file excel: ")
@@ -311,6 +309,13 @@ class App(QWidget):
 
         self.start_button.clicked.connect(self.start_worker)
         self.stop_button.clicked.connect(self.stop_worker)
+
+        self.method_group = QButtonGroup(self)
+        self.method_update = QRadioButton("Update Direktori", self)
+        self.method_add = QRadioButton("Tambah Direktori", self)
+        self.method_group.addButton(self.method_update)
+        self.method_group.addButton(self.method_add)
+        self.method_update.setChecked(True)
 
         self.pilih_kab = QComboBox(self)
         self.pilih_kab.addItems(
@@ -361,6 +366,12 @@ class App(QWidget):
         reg.addWidget(QLabel("Satker:", self))
         reg.addWidget(self.pilih_kab, 1)
 
+        method_layout = QHBoxLayout()
+        method_layout.addWidget(QLabel("Method:", self))
+        method_layout.addWidget(self.method_update)
+        method_layout.addWidget(self.method_add)
+        method_layout.addStretch()
+
         btns = QHBoxLayout()
         btns.addWidget(self.start_button)
         btns.addWidget(self.stop_button)
@@ -369,6 +380,7 @@ class App(QWidget):
         root.addLayout(creds)
         root.addLayout(top)
         root.addLayout(reg)
+        root.addLayout(method_layout)
         root.addLayout(btns)
         root.addWidget(self.progress)
         root.addWidget(QLabel("Logs:", self))
@@ -388,6 +400,7 @@ class App(QWidget):
         excel = self.path_edit.text().strip()
         username = self.username_field.text().strip()
         password = self.password_field.text()
+        method = "Update" if self.method_update.isChecked() else "Tambah"
 
         if not username or not password:
             QMessageBox.warning(
@@ -409,7 +422,7 @@ class App(QWidget):
         self.progress.setValue(0)
         self.log.clear()
 
-        self.worker = Worker(excel, kabupaten, username, password)
+        self.worker = Worker(excel, kabupaten, username, password, method)
         self.worker.log.connect(self.append_log)
         self.worker.progress.connect(self.progress.setValue)
         self.worker.finished_ok.connect(self.worker_finished_ok)
@@ -447,13 +460,19 @@ class Worker(QThread):
     finished_err = Signal(str)
 
     def __init__(
-        self, excel_path: str, kabupaten_text: str, username: str, password: str
+        self,
+        excel_path: str,
+        kabupaten_text: str,
+        username: str,
+        password: str,
+        method: str,
     ):
         super().__init__()
         self.excel_path = excel_path
         self.kabupaten_text = kabupaten_text
         self.username = username
         self.password = password
+        self.method = method
         self._stop_requested = False
 
     def request_stop(self):
@@ -468,7 +487,9 @@ class Worker(QThread):
             from playwright.sync_api import sync_playwright
 
             username, password = self.username, self.password
-            self._emit(f"using SSO: {username}\n")
+            self._emit(f"Using SSO: {username}\n")
+            self._emit(f"Method: {self.method}\n")
+            self._emit("Starting automation...\n")
 
             df = read_profiling_excel(self.excel_path)
             total = len(df)
@@ -506,7 +527,7 @@ class Worker(QThread):
                 # tail_df = df.tail(50)
                 for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
                     if self._stop_requested:
-                        self._emit("Stop. Exiting loop...\n")
+                        self._emit("Stop requested. Exiting loop...\n")
                         break
 
                     page.locator('[name="idsbr"]').fill(str(idsbr))
@@ -577,12 +598,17 @@ class Worker(QThread):
                     # update progress
                     self.progress.emit(int(idx / total * 100))
 
-                self._emit("Done. Leaving browser open a moment.\n")
+                if self._stop_requested:
+                    self._emit("Stopped by user.\n")
+                else:
+                    self._emit("Done. Leaving browser open a moment.\n")
                 self.finished_ok.emit()
                 # browser.close()
 
         except Exception as e:
-            self.finished_err.emit(str(e))
+            err_msg = "Error occurred: " + str(e) + "\n" + traceback.format_exc()
+            self._emit(f'Exception: {err_msg}\\n"')
+            self.finished_err.emit(err_msg)
 
 
 if __name__ == "__main__":
