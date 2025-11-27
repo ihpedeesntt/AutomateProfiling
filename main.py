@@ -15,21 +15,22 @@ from PySide6.QtWidgets import (
     QTextEdit,
     QProgressBar,
 )
-from dotenv import load_dotenv
+from PySide6.QtGui import QAction, QIcon
 from playwright.sync_api import sync_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 import pandas as pd
 import time
 from pathlib import Path
 from typing import Callable, Optional
-import re   
+import re
 
 
 def read_profiling_excel(filepath):
-    df = pd.read_excel(filepath, index_col=0, dtype={'Idsbr duplikat': str})
+    df = pd.read_excel(filepath, index_col=0, dtype={"Idsbr duplikat": str})
     return df
 
-def login(page,context,username,password):
+
+def login(page, context, username, password):
     page.goto("https://matchapro.web.bps.go.id/")
 
     try:
@@ -44,6 +45,7 @@ def login(page,context,username,password):
         print("already logged in")
         print(e)
 
+
 def informasi_usaha(new_page, row):
     def safe_str_int(value):
         if pd.isna(value) or str(value).strip() == "":
@@ -52,7 +54,7 @@ def informasi_usaha(new_page, row):
             return str(int(float(value)))
         except (ValueError, TypeError):
             return None
-        
+
     SEKTOR_INSTITUSI = {
         "1": "S11 - Korporasi Finansial",
         "2": "S12 - Korporasi Non Finansial",
@@ -63,19 +65,19 @@ def informasi_usaha(new_page, row):
     }
 
     BENTUK_BADAN_HUKUM = {
-        "1" : '1. Perseroan (PT/NV, PT Persero, PT Tbk, PT Persero Tbk, Perseroan Daerah, Perseroan Perseorangan)',
-        "2" : '2. Yayasan' ,
-        "3" : '3. Koperasi',
-        "4" : '4. Dana Pensiun',
-        "5" : '5. Perum/Perumda',
-        "6" : '6. BUM Desa',
-        "7" : '7. Persekutuan Komanditer (CV)',
-        "8" : '8. Persekutuan Firma',
-        "9" : '9. Persekutuan Perdata',
-        "10": '10. Kantor Perwakilan Luar Negeri',
-        "11": '11. Badan Usaha Luar Negeri',
-        "12": '12. Usaha orang perseorangan',
-        "13": '13. Lainnya'
+        "1": "1. Perseroan (PT/NV, PT Persero, PT Tbk, PT Persero Tbk, Perseroan Daerah, Perseroan Perseorangan)",
+        "2": "2. Yayasan",
+        "3": "3. Koperasi",
+        "4": "4. Dana Pensiun",
+        "5": "5. Perum/Perumda",
+        "6": "6. BUM Desa",
+        "7": "7. Persekutuan Komanditer (CV)",
+        "8": "8. Persekutuan Firma",
+        "9": "9. Persekutuan Perdata",
+        "10": "10. Kantor Perwakilan Luar Negeri",
+        "11": "11. Badan Usaha Luar Negeri",
+        "12": "12. Usaha orang perseorangan",
+        "13": "13. Lainnya",
     }
 
     jenis_kepemilikan_usaha = safe_str_int(row.get("Jenis kepemilikan usaha"))
@@ -102,11 +104,18 @@ def informasi_usaha(new_page, row):
             print(f"Error filling '{label}']: {e}")
 
     if jenis_kepemilikan_usaha:
-        safe_click("#select2-jenis_kepemilikan_usaha-container", "Jenis Kepemilikan Usaha")
+        safe_click(
+            "#select2-jenis_kepemilikan_usaha-container", "Jenis Kepemilikan Usaha"
+        )
         try:
-            new_page.locator(".select2-results__option", has_text=re.compile(jenis_kepemilikan_usaha, re.I)).click()
+            new_page.locator(
+                ".select2-results__option",
+                has_text=re.compile(jenis_kepemilikan_usaha, re.I),
+            ).click()
         except Exception as e:
-            print(f"Error selecting Jenis Kepemilikan Usaha option '{jenis_kepemilikan_usaha}']: {e}")
+            print(
+                f"Error selecting Jenis Kepemilikan Usaha option '{jenis_kepemilikan_usaha}']: {e}"
+            )
 
     if bentuk_badan_hukum:
         label = BENTUK_BADAN_HUKUM.get(bentuk_badan_hukum, bentuk_badan_hukum)
@@ -120,7 +129,9 @@ def informasi_usaha(new_page, row):
         safe_fill("Tahun Berdiri", tahun_berdiri)
 
     if jaringan_usaha:
-        jaringan_usaha_locator = f'input[name="jaringan_usaha"][value="{jaringan_usaha}"]'
+        jaringan_usaha_locator = (
+            f'input[name="jaringan_usaha"][value="{jaringan_usaha}"]'
+        )
         try:
             new_page.locator(jaringan_usaha_locator).check()
         except Exception as e:
@@ -137,13 +148,12 @@ def informasi_usaha(new_page, row):
     return
 
 
-
 def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = None):
-    def log(msg:str):
+    def log(msg: str):
         print(msg)
         if emit:
             emit(msg)
-            
+
     edit_button = page.locator(".btn-edit-perusahaan").first
     edit_button.wait_for(state="visible", timeout=30000)
     if edit_button.count() == 1:
@@ -163,10 +173,10 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
         while True:
             try:
                 loading_spinner.wait_for(state="detached", timeout=10000)
-                break 
+                break
             except PlaywrightTimeoutError:
                 log("Still loading data...")
-                pass 
+                pass
 
         time.sleep(5)
         if new_page.get_by_label("Sumber Profiling").count() == 0:
@@ -184,28 +194,34 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             if value == "9":
                 dupe = row["Idsbr duplikat"]
                 dupe_str = str(int(dupe))
-                new_page.get_by_placeholder("IDSBR Master").fill(
-                    dupe_str
+                new_page.get_by_placeholder("IDSBR Master").fill(dupe_str)
+                log(
+                    f"Filling IDSBR Master with {str(row['Idsbr duplikat'])} for {idsbr}"
                 )
-                log(f"Filling IDSBR Master with {str(row['Idsbr duplikat'])} for {idsbr}")
                 new_page.wait_for_timeout(1000)
-                new_page.locator(".btn.btn-outline-primary", has_text="Check").wait_for(state="visible")
+                new_page.locator(".btn.btn-outline-primary", has_text="Check").wait_for(
+                    state="visible"
+                )
                 new_page.locator(".btn.btn-outline-primary", has_text="Check").click()
                 log("Clicked button to fetch data from IDSBR Master")
                 try:
-                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").wait_for(state="visible", timeout=30000)
-                    new_page.locator(".btn.btn-danger.waves-effect", has_text="Accept").click()
+                    new_page.locator(
+                        ".btn.btn-danger.waves-effect", has_text="Accept"
+                    ).wait_for(state="visible", timeout=30000)
+                    new_page.locator(
+                        ".btn.btn-danger.waves-effect", has_text="Accept"
+                    ).click()
                     log("Confirmed to proceed with IDSBR Master data")
                 except Exception as e:
                     raise ValueError(f"Erorr time for waiting : {e}")
-                
+
             informasi_usaha(new_page, row)
 
             email_field = new_page.get_by_placeholder("Email")
             checkbox = new_page.locator("#check-email")
             email_value = email_field.input_value().strip()
 
-            if not email_value :
+            if not email_value:
                 if checkbox.is_checked():
                     checkbox.uncheck()
                     log(f"unchecked email checkbox for {idsbr}")
@@ -217,13 +233,16 @@ def update_profiling(page, idsbr, row, emit: Optional[Callable[[str], None]] = N
             new_page.get_by_text("Submit Final").click(force=True)
             konsistensi = new_page.locator("#confirm-consistency")
             if konsistensi.count() == 1:
-                konsistensi.click()    
-            new_page.locator("button.swal2-confirm", has_text="Ya, Submit!").click()               
+                konsistensi.click()
+            new_page.locator("button.swal2-confirm", has_text="Ya, Submit!").click()
             new_page.wait_for_timeout(1000)
             new_page.close()
             time.sleep(5)
 
-def wait_for_search_spinner(page, emit=None, appear_timeout=10_000, disappear_timeout=30_000):
+
+def wait_for_search_spinner(
+    page, emit=None, appear_timeout=10_000, disappear_timeout=30_000
+):
     spinner = page.locator("div.blockUI.blockMsg.blockElement").first
 
     try:
@@ -240,24 +259,45 @@ def wait_for_search_spinner(page, emit=None, appear_timeout=10_000, disappear_ti
         print("Continue\n")
 
 
-def load_sso():
-    load_dotenv()
+class PasswordLineEdit(QLineEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
-    username = os.getenv("USERNAME_SSO")
-    password = os.getenv("PASSWORD")
+        self.setEchoMode(QLineEdit.Password)
 
-    if not username or not password :
-        raise ValueError("Masukkan Username dan Password di .env file!")
-    
-    return username,password
+        self.iconShow = QIcon("icons/view.png")
+        self.iconHide = QIcon("icons/hide.png")
+
+        self.showPassAction = QAction(self.iconShow, "Show password", self)
+        self.addAction(self.showPassAction, QLineEdit.TrailingPosition)
+        self.showPassAction.setCheckable(True)
+        self.showPassAction.toggled.connect(self.togglePasswordVisibility)
+
+    def togglePasswordVisibility(self, show):
+        if show:
+            self.setEchoMode(QLineEdit.Normal)
+            self.showPassAction.setIcon(self.iconHide)
+        else:
+            self.setEchoMode(QLineEdit.Password)
+            self.showPassAction.setIcon(self.iconShow)
+
 
 class App(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Matchapro Automate Entry")
         self.setMinimumWidth(760)
+        self.worker = None
 
-        # load file excel
+        self.username_field = QLineEdit(self)
+        self.username_field.setPlaceholderText("Username SSO")
+        self.username_field.setClearButtonEnabled(True)
+        self.password_field = QLineEdit(self)
+        self.password_field.setPlaceholderText("Password SSO")
+        self.password_field.setEchoMode(PasswordLineEdit.Password)
+        self.password_field.setClearButtonEnabled(True)
+        self.password_field.displayText()
+
         self.path_edit = QLineEdit(self)
         self.path_edit.setPlaceholderText("Pilih file excel: ")
         self.path_edit.setReadOnly(True)
@@ -267,36 +307,38 @@ class App(QWidget):
         self.browse_button.clicked.connect(self.browse_file)
         self.start_button = QPushButton("Start", self)
         self.stop_button = QPushButton("Stop", self)
-        # self.load_button = QPushButton("Load", self)
+        self.stop_button.setEnabled(False)
 
         self.start_button.clicked.connect(self.start_worker)
         self.stop_button.clicked.connect(self.stop_worker)
 
         self.pilih_kab = QComboBox(self)
-        self.pilih_kab.addItems([
-            "[01] SUMBA BARAT",
-            "[02] SUMBA TIMUR",
-            "[03] KUPANG" ,
-            "[04] TIMOR TENGAH SELATAN" ,
-            "[05] TIMOR TENGAH UTARA" ,
-            "[06] BELU",
-            "[07] ALOR",
-            "[08] LEMBATA",
-            "[09] FLORES TIMUR",
-            "[10] SIKKA",
-            "[11] ENDE",
-            "[12] NGADA",
-            "[13] MANGGARAI",
-            "[14] ROTE NDAO",
-            "[15] MANGGARAI BARAT",
-            "[16] SUMBA TENGAH",
-            "[17] SUMBA BARAT DAYA",
-            "[18] NAGEKEO",
-            "[19] MANGGARAI TIMUR",
-            "[20] SABU RAIJUA",
-            "[21] MALAKA",
-            "[71] KUPANG"  
-        ])
+        self.pilih_kab.addItems(
+            [
+                "[01] SUMBA BARAT",
+                "[02] SUMBA TIMUR",
+                "[03] KUPANG",
+                "[04] TIMOR TENGAH SELATAN",
+                "[05] TIMOR TENGAH UTARA",
+                "[06] BELU",
+                "[07] ALOR",
+                "[08] LEMBATA",
+                "[09] FLORES TIMUR",
+                "[10] SIKKA",
+                "[11] ENDE",
+                "[12] NGADA",
+                "[13] MANGGARAI",
+                "[14] ROTE NDAO",
+                "[15] MANGGARAI BARAT",
+                "[16] SUMBA TENGAH",
+                "[17] SUMBA BARAT DAYA",
+                "[18] NAGEKEO",
+                "[19] MANGGARAI TIMUR",
+                "[20] SABU RAIJUA",
+                "[21] MALAKA",
+                "[71] KUPANG",
+            ]
+        )
 
         self.progress = QProgressBar(self)
         self.progress.setRange(0, 100)
@@ -305,9 +347,14 @@ class App(QWidget):
         self.log = QTextEdit(self)
         self.log.setReadOnly(True)
 
+        creds = QHBoxLayout()
+        creds.addWidget(QLabel("SSO:", self))
+        creds.addWidget(self.username_field, 1)
+        creds.addWidget(self.password_field, 1)
+
         top = QHBoxLayout()
         top.addWidget(QLabel("File Excel:", self))
-        top.addWidget(self.path_edit,1)
+        top.addWidget(self.path_edit, 1)
         top.addWidget(self.browse_button)
 
         reg = QHBoxLayout()
@@ -319,13 +366,13 @@ class App(QWidget):
         btns.addWidget(self.stop_button)
 
         root = QVBoxLayout(self)
+        root.addLayout(creds)
         root.addLayout(top)
         root.addLayout(reg)
         root.addLayout(btns)
         root.addWidget(self.progress)
         root.addWidget(QLabel("Logs:", self))
         root.addWidget(self.log, 1)
-
 
     def browse_file(self):
         file_dialog = QFileDialog(self)
@@ -339,6 +386,16 @@ class App(QWidget):
 
     def start_worker(self):
         excel = self.path_edit.text().strip()
+        username = self.username_field.text().strip()
+        password = self.password_field.text()
+
+        if not username or not password:
+            QMessageBox.warning(
+                self,
+                "Missing credentials",
+                "Masukkan username dan password SSO terlebih dahulu!",
+            )
+            return
         if not excel:
             QMessageBox.warning(
                 self, "Missing file", "Upload file excel terlebih dahulu!"
@@ -347,14 +404,16 @@ class App(QWidget):
         if not Path(excel).exists():
             QMessageBox.warning(self, "Invalid file", "File Corrupted.")
             return
-        
+
         kabupaten = self.pilih_kab.currentText()
         self.progress.setValue(0)
         self.log.clear()
 
-        self.worker = Worker(excel, kabupaten)
+        self.worker = Worker(excel, kabupaten, username, password)
         self.worker.log.connect(self.append_log)
         self.worker.progress.connect(self.progress.setValue)
+        self.worker.finished_ok.connect(self.worker_finished_ok)
+        self.worker.finished_err.connect(self.worker_finished_err)
 
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
@@ -366,7 +425,7 @@ class App(QWidget):
             self.append_log("Stop")
         self.stop_button.setEnabled(False)
         self.start_button.setEnabled(True)
-    
+
     def append_log(self, msg: str):
         self.log.append(msg.rstrip("\n"))
 
@@ -379,17 +438,22 @@ class App(QWidget):
         self.append_log(f"Error: {err}\n")
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        
+
+
 class Worker(QThread):
     log = Signal(str)
     progress = Signal(int)
     finished_ok = Signal()
     finished_err = Signal(str)
 
-    def __init__(self, excel_path: str, kabupaten_text: str):
+    def __init__(
+        self, excel_path: str, kabupaten_text: str, username: str, password: str
+    ):
         super().__init__()
         self.excel_path = excel_path
         self.kabupaten_text = kabupaten_text
+        self.username = username
+        self.password = password
         self._stop_requested = False
 
     def request_stop(self):
@@ -403,8 +467,7 @@ class Worker(QThread):
         try:
             from playwright.sync_api import sync_playwright
 
-            load_dotenv()
-            username,password = load_sso()
+            username, password = self.username, self.password
             self._emit(f"using SSO: {username}\n")
 
             df = read_profiling_excel(self.excel_path)
@@ -414,14 +477,16 @@ class Worker(QThread):
                 self.finished_ok.emit()
                 return
 
-            self._emit(f"Loaded Excel: {self.excel_path} ({total} baris direktori) untuk Satker {self.kabupaten_text}\n")
+            self._emit(
+                f"Loaded Excel: {self.excel_path} ({total} baris direktori) untuk Satker {self.kabupaten_text}\n"
+            )
 
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=False)
                 context = browser.new_context(
                     storage_state="state.json" if os.path.exists("state.json") else None
                 )
-                context.set_default_timeout(60_000)             
+                context.set_default_timeout(60_000)
                 context.set_default_navigation_timeout(90_000)
                 page = context.new_page()
 
@@ -435,13 +500,15 @@ class Worker(QThread):
                     ".select2-results__option", has_text="[53] NUSA TENGGARA TIMUR"
                 ).click()
                 page.locator("#select2-f_kabupaten-container").click()
-                page.locator(".select2-results__option", has_text=f"{self.kabupaten_text}").click()
+                page.locator(
+                    ".select2-results__option", has_text=f"{self.kabupaten_text}"
+                ).click()
                 # tail_df = df.tail(50)
                 for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
                     if self._stop_requested:
                         self._emit("Stop. Exiting loop...\n")
                         break
-                    
+
                     page.locator('[name="idsbr"]').fill(str(idsbr))
                     self._emit(f"Mengisi {idsbr} - {row['Nama usaha']}\n")
                     wait_for_search_spinner(page, emit=self._emit)
@@ -461,23 +528,32 @@ class Worker(QThread):
                         status = page.locator(
                             "#table-history-profiling span.badge.rounded-pill"
                         ).first
-                        profiler = page.locator("#table-history-profiling tbody tr td").first.inner_text()
+                        profiler = page.locator(
+                            "#table-history-profiling tbody tr td"
+                        ).first.inner_text()
                         status_text = status.inner_text().lower()
                         self._emit(f"Status: {status_text}\n")
 
                         if status_text == "submitted" or status_text == "approved":
-                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah submit atau approved\n")
+                            self._emit(
+                                f"{idsbr} - {row['Nama usaha']} sudah submit atau approved\n"
+                            )
                             page.wait_for_timeout(1000)
                             page.locator(
                                 "#modal-view-history-profiling button", has_text="Close"
                             ).click(force=True)
-                        elif status_text == "open" and profiler.strip().lower() != username.strip().lower():
-                            self._emit(f"{idsbr} - {row['Nama usaha']} sudah diinput oleh {profiler}, bukan oleh {username}\n")
+                        elif (
+                            status_text == "open"
+                            and profiler.strip().lower() != username.strip().lower()
+                        ):
+                            self._emit(
+                                f"{idsbr} - {row['Nama usaha']} sudah diinput oleh {profiler}, bukan oleh {username}\n"
+                            )
                             page.wait_for_timeout(1000)
                             page.locator(
                                 "#modal-view-history-profiling button", has_text="Close"
                             ).click(force=True)
-                            
+
                         else:
                             self._emit(f"{idsbr} - {row['Nama usaha']} belum submit\n")
                             page.wait_for_timeout(1000)
@@ -486,7 +562,12 @@ class Worker(QThread):
                             ).click(force=True)
                             page.wait_for_timeout(1000)
                             update_profiling(page, idsbr, row, emit=self._emit)
-                    elif page.locator('span.badge.bg-light-primary', has_text="PROFILING").count() > 0:
+                    elif (
+                        page.locator(
+                            "span.badge.bg-light-primary", has_text="PROFILING"
+                        ).count()
+                        > 0
+                    ):
                         self._emit("Locked\n")
                     else:
                         self._emit("Open\n")
@@ -500,13 +581,9 @@ class Worker(QThread):
                 self.finished_ok.emit()
                 # browser.close()
 
-            if self._stop_requested:
-                self.finished_ok.emit()
-            else:
-                self.finished_ok.emit()
-
         except Exception as e:
             self.finished_err.emit(str(e))
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
