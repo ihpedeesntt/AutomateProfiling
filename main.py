@@ -28,7 +28,9 @@ import re
 
 
 def read_profiling_excel(filepath):
-    df = pd.read_excel(filepath, index_col=0, dtype={"Idsbr duplikat": str})
+    df = pd.read_excel(
+        filepath, index_col=0, dtype={"Idsbr duplikat": str, "Idsbr": str}
+    )
     return df
 
 
@@ -482,6 +484,123 @@ class Worker(QThread):
         print(msg, end="" if msg.endswith("\n") else "\n")
         self.log.emit(msg if msg.endswith("\n") else msg + "\n")
 
+    def update_direktori(self, page, df, total, username):
+        page.goto("https://matchapro.web.bps.go.id/direktori-usaha")
+        page.click("text=Skip")
+        page.locator("#select2-f_provinsi-container").click()
+        page.locator(
+            ".select2-results__option", has_text="[53] NUSA TENGGARA TIMUR"
+        ).click()
+        page.locator("#select2-f_kabupaten-container").click()
+        page.locator(
+            ".select2-results__option", has_text=f"{self.kabupaten_text}"
+        ).click()
+
+        for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
+            if self._stop_requested:
+                self._emit("Stop requested. Exiting loop...\n")
+                break
+
+            page.locator('[name="idsbr"]').fill(str(idsbr))
+            self._emit(f"Mengisi {idsbr} - {row['Nama usaha']}\n")
+            wait_for_search_spinner(page, emit=self._emit)
+
+            if page.get_by_label("Lihat History Profiling").count() == 1:
+                history_profiling = page.get_by_label("Lihat History Profiling").first
+                history_profiling.click()
+
+                page.locator(".modal-body > .blockUI.blockMsg.blockElement").wait_for(
+                    state="detached",
+                )
+
+                status = page.locator(
+                    "#table-history-profiling span.badge.rounded-pill"
+                ).first
+                profiler = page.locator(
+                    "#table-history-profiling tbody tr td"
+                ).first.inner_text()
+                status_text = status.inner_text().lower()
+                self._emit(f"Status: {status_text}\n")
+
+                if status_text == "submitted" or status_text == "approved":
+                    self._emit(
+                        f"{idsbr} - {row['Nama usaha']} sudah submit atau approved\n"
+                    )
+                    page.wait_for_timeout(1000)
+                    page.locator(
+                        "#modal-view-history-profiling button", has_text="Close"
+                    ).click(force=True)
+                elif (
+                    status_text == "open"
+                    and profiler.strip().lower() != username.strip().lower()
+                ):
+                    self._emit(
+                        f"{idsbr} - {row['Nama usaha']} sudah diinput oleh {profiler}, bukan oleh {username}\n"
+                    )
+                    page.wait_for_timeout(1000)
+                    page.locator(
+                        "#modal-view-history-profiling button", has_text="Close"
+                    ).click(force=True)
+
+                else:
+                    self._emit(f"{idsbr} - {row['Nama usaha']} belum submit\n")
+                    page.wait_for_timeout(1000)
+                    page.locator(
+                        "#modal-view-history-profiling button", has_text="Close"
+                    ).click(force=True)
+                    page.wait_for_timeout(1000)
+                    update_profiling(page, idsbr, row, emit=self._emit)
+            elif (
+                page.locator(
+                    "span.badge.bg-light-primary", has_text="PROFILING"
+                ).count()
+                > 0
+            ):
+                self._emit("Locked\n")
+            else:
+                self._emit("Open\n")
+                page.wait_for_timeout(1000)
+                update_profiling(page, idsbr, row, emit=self._emit)
+
+            self.progress.emit(int(idx / total * 100))
+
+    def tambah_direktori(self, page, df, total, username):
+        page.goto("https://matchapro.web.bps.go.id/profiling/create/usaha/input-form")
+
+        for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
+            if self._stop_requested:
+                self._emit("Stop requested. Exiting loop...\n")
+                break
+
+            self._emit(f"Mengisi Usaha Baru - {row['Nama usaha']}\n")
+            page.locator("#nama_usaha").fill(str(row["Nama usaha"]))
+            page.locator("#alamat").fill(str(row["Alamat"]))
+            # Select Provinsi
+            page.locator(
+                "#select2-select2-provinsi-container",
+            ).click()
+            page.locator(
+                "li.select2-results__option",
+                has_text="[53] NUSA TENGGARA TIMUR",
+            ).click()
+            # Select Kabupaten/Kota
+            page.locator("#select2-select2-kabupaten_kota-container").click()
+            page.locator(
+                "li.select2-results__option", has_text=f"{self.kabupaten_text}"
+            ).click()
+            page.locator("#select2-select2-kecamatan-container").click()
+            kdkec_string = str(row["Kdkec"]).strip()
+            kdkec = kdkec_string[-3:] if kdkec_string else ""
+            page.locator("li.select2-results__option", has_text=f"{kdkec}").click()
+            page.locator("#select2-select2-kelurahan_desa-container").click()
+            kddesa_string = str(row["Kddesa"]).strip()
+            kddesa = kddesa_string[-3:] if kddesa_string else ""
+            page.locator("li.select2-results__option", has_text=f"{kddesa}").click()
+
+            page.get_by_text("Next").click()
+            time.sleep(5)
+            input("Press Enter to continue...")
+
     def run(self):
         try:
             from playwright.sync_api import sync_playwright
@@ -514,89 +633,11 @@ class Worker(QThread):
                 self._emit("Login...\n")
                 login(page, context, username, password)
 
-                page.goto("https://matchapro.web.bps.go.id/direktori-usaha")
-                page.click("text=Skip")
-                page.locator("#select2-f_provinsi-container").click()
-                page.locator(
-                    ".select2-results__option", has_text="[53] NUSA TENGGARA TIMUR"
-                ).click()
-                page.locator("#select2-f_kabupaten-container").click()
-                page.locator(
-                    ".select2-results__option", has_text=f"{self.kabupaten_text}"
-                ).click()
-                # tail_df = df.tail(50)
-                for idx, (idsbr, row) in enumerate(df.iterrows(), start=1):
-                    if self._stop_requested:
-                        self._emit("Stop requested. Exiting loop...\n")
-                        break
-
-                    page.locator('[name="idsbr"]').fill(str(idsbr))
-                    self._emit(f"Mengisi {idsbr} - {row['Nama usaha']}\n")
-                    wait_for_search_spinner(page, emit=self._emit)
-
-                    if page.get_by_label("Lihat History Profiling").count() == 1:
-                        history_profiling = page.get_by_label(
-                            "Lihat History Profiling"
-                        ).first
-                        history_profiling.click()
-
-                        page.locator(
-                            ".modal-body > .blockUI.blockMsg.blockElement"
-                        ).wait_for(
-                            state="detached",
-                        )
-
-                        status = page.locator(
-                            "#table-history-profiling span.badge.rounded-pill"
-                        ).first
-                        profiler = page.locator(
-                            "#table-history-profiling tbody tr td"
-                        ).first.inner_text()
-                        status_text = status.inner_text().lower()
-                        self._emit(f"Status: {status_text}\n")
-
-                        if status_text == "submitted" or status_text == "approved":
-                            self._emit(
-                                f"{idsbr} - {row['Nama usaha']} sudah submit atau approved\n"
-                            )
-                            page.wait_for_timeout(1000)
-                            page.locator(
-                                "#modal-view-history-profiling button", has_text="Close"
-                            ).click(force=True)
-                        elif (
-                            status_text == "open"
-                            and profiler.strip().lower() != username.strip().lower()
-                        ):
-                            self._emit(
-                                f"{idsbr} - {row['Nama usaha']} sudah diinput oleh {profiler}, bukan oleh {username}\n"
-                            )
-                            page.wait_for_timeout(1000)
-                            page.locator(
-                                "#modal-view-history-profiling button", has_text="Close"
-                            ).click(force=True)
-
-                        else:
-                            self._emit(f"{idsbr} - {row['Nama usaha']} belum submit\n")
-                            page.wait_for_timeout(1000)
-                            page.locator(
-                                "#modal-view-history-profiling button", has_text="Close"
-                            ).click(force=True)
-                            page.wait_for_timeout(1000)
-                            update_profiling(page, idsbr, row, emit=self._emit)
-                    elif (
-                        page.locator(
-                            "span.badge.bg-light-primary", has_text="PROFILING"
-                        ).count()
-                        > 0
-                    ):
-                        self._emit("Locked\n")
-                    else:
-                        self._emit("Open\n")
-                        page.wait_for_timeout(1000)
-                        update_profiling(page, idsbr, row, emit=self._emit)
-
-                    # update progress
-                    self.progress.emit(int(idx / total * 100))
+                if self.method.lower() == "update":
+                    self.update_direktori(page, df, total, username)
+                else:
+                    self._emit("Mode Tambah Direktori belum dibuat.\n")
+                    self.tambah_direktori(page, df, total, username)
 
                 if self._stop_requested:
                     self._emit("Stopped by user.\n")
@@ -606,8 +647,8 @@ class Worker(QThread):
                 # browser.close()
 
         except Exception as e:
-            err_msg = "Error occurred: " + str(e) + "\n" + traceback.format_exc()
-            self._emit(f'Exception: {err_msg}\\n"')
+            err_msg = f"Error occurred: {e}\n{traceback.format_exc()}"
+            self._emit(f"Exception: {err_msg}\n")
             self.finished_err.emit(err_msg)
 
 
